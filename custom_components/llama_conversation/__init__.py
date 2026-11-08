@@ -54,6 +54,7 @@ from .backends.ollama import OllamaAPIClient
 from .backends.anthropic import AnthropicAPIClient
 from .utils import get_llama_cpp_python_version, download_model_from_hf
 from .prewarm import async_setup_services as async_setup_prewarm_services
+from .context_export import async_setup_services as async_setup_context_services
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -90,6 +91,7 @@ BACKEND_TO_CLS: dict[str, type[LocalLLMClient]] = {
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """[prewarm1] Register the integration's actions."""
     async_setup_prewarm_services(hass)
+    async_setup_context_services(hass)
     return True
 
 

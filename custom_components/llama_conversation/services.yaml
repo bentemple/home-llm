@@ -1,4 +1,47 @@
-# [prewarm1] local patch, see prewarm.py
+# Local actions for wake-word prewarm and automation-owned context.
+get_context:
+  description: Render fresh home context for an automation, optionally warming the returned prefix. Runs no tools.
+  fields:
+    agent_id:
+      required: true
+      selector:
+        entity:
+          filter:
+            domain: conversation
+            integration: llama_conversation
+    device_id:
+      selector:
+        text: {}
+    satellite_id:
+      selector:
+        entity:
+          filter:
+            domain: assist_satellite
+    language:
+      selector:
+        text: {}
+    extra_system_prompt:
+      description: Instructions appended after the freshly rendered home prompt.
+      selector:
+        text:
+          multiline: true
+    include_tools:
+      default: true
+      description: Return native tool definitions. Set false for a JSON-only planner.
+      selector:
+        boolean: {}
+    prewarm:
+      default: false
+      description: Send this exact prefix to the configured backend with generation disabled.
+      selector:
+        boolean: {}
+    timeout:
+      default: 60
+      selector:
+        number:
+          min: 1
+          max: 300
+          unit_of_measurement: s
 prewarm:
   fields:
     agent_id:
