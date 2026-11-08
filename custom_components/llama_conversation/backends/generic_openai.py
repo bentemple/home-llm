@@ -250,6 +250,45 @@ class GenericOpenAIAPIClient(LocalLLMClient):
         endpoint = "/chat/completions"
         return endpoint, request_params
 
+    async def async_prewarm(
+        self,
+        system_prompt: str,
+        llm_api: llm.APIInstance | None,
+        entity_options: dict[str, Any],
+        timeout: float,
+    ) -> Dict[str, Any] | None:
+        """[prewarm1] Have the server process the prefix of the next first-turn request, generating nothing.
+
+        The messages and tools are built exactly as _generate_stream / _generate build them for a conversation
+        whose only content is this system prompt, so the server renders the same tokens the real request starts
+        with. Two request fields make it a prefix-only request (llama.cpp server):
+          add_generation_prompt false - the chat template does not append the assistant turn opener
+          max_tokens 0                - nothing is generated; the prompt is processed into the cache
+        No text is added to the prompt. Sampling and output options are left out: they do not change the prompt.
+        """
+        enable_legacy_tool_calling = entity_options.get(CONF_ENABLE_LEGACY_TOOL_CALLING, DEFAULT_ENABLE_LEGACY_TOOL_CALLING)
+        tool_response_as_string = entity_options.get(CONF_TOOL_RESPONSE_AS_STRING, DEFAULT_TOOL_RESPONSE_AS_STRING)
+
+        messages = get_oai_formatted_messages(
+            [conversation.SystemContent(content=system_prompt)],
+            user_content_as_list=True,
+            tool_result_to_str=tool_response_as_string,
+        )
+        request_params: Dict[str, Any] = {
+            "model": entity_options[CONF_CHAT_MODEL],
+            "max_tokens": 0,
+            "messages": messages,
+        }
+        if llm_api and not enable_legacy_tool_calling:
+            request_params["tools"] = get_oai_formatted_tools(llm_api, self._async_get_all_exposed_domains())
+
+        async with AsyncOpenAI(api_key=self.api_key, base_url=self.api_host, timeout=timeout, max_retries=0) as client:
+            completion = await client.chat.completions.create(
+                **request_params, extra_body={"add_generation_prompt": False, "cache_prompt": True}
+            )
+        timings = (getattr(completion, "model_extra", None) or {}).get("timings") or {}
+        return {k: timings.get(k) for k in ("cache_n", "prompt_n", "prompt_ms")} if timings else None
+
 
 class GenericOpenAIResponsesAPIClient(LocalLLMClient):
     """Implements the OpenAPI-compatible Responses API backend."""

@@ -378,5 +378,37 @@
                 "pl": "Polish"
             }
         }
+    },
+    "services": {
+        "prewarm": {
+            "name": "Pre-warm prompt",
+            "description": "Lets the model server process the start of the next conversation from a satellite (system prompt and tools, no user message) before the request arrives. Generates nothing and writes nothing to any conversation. Skipped when the satellite is still in an active conversation.",
+            "fields": {
+                "agent_id": {
+                    "name": "Conversation agent",
+                    "description": "The Local LLMs conversation agent the satellite's pipeline uses."
+                },
+                "satellite_id": {
+                    "name": "Satellite",
+                    "description": "The assist satellite that woke up. Its device and area decide the area sentence and tools, as in a real request."
+                },
+                "device_id": {
+                    "name": "Device",
+                    "description": "Use this device instead of the satellite's device."
+                },
+                "language": {
+                    "name": "Language",
+                    "description": "Pipeline conversation language (default: the Home Assistant language)."
+                },
+                "timeout": {
+                    "name": "Timeout",
+                    "description": "Seconds the background request may take. Keep it above the prompt processing time: the server drops the work when the request is cut off."
+                },
+                "keep_warm": {
+                    "name": "Keep-warm call",
+                    "description": "Set when the action runs on a timer instead of on a wake-up: it is then skipped while any satellite is in an active conversation, so it never displaces a live conversation's prompt."
+                }
+            }
+        }
     }
 }

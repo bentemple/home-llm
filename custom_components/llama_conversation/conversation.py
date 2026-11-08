@@ -17,6 +17,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from custom_components.llama_conversation.utils import MalformedToolCallException, PreparedLLMAPI, prompt_as_literal, strip_thinking_blocks, tool_result_data
 
 from .entity import LocalLLMEntity, LocalLLMClient, LocalLLMConfigEntry
+from . import prewarm as prewarm_helpers
 from .const import (
     CONF_CHAT_MODEL,
     CONF_CONTEXT_LENGTH,
@@ -82,6 +83,10 @@ class LocalLLMAgent(ConversationEntity, AbstractConversationAgent, LocalLLMEntit
 
         # conversation id -> (prompt template, rendered prompt)
         self._system_prompts: OrderedDict[str, Tuple[str, str]] = OrderedDict()
+
+        # [prewarm1] device id -> what the last pre-warm sent (debug comparison only); devices with one running
+        self._prewarms: Dict[str, prewarm_helpers.PrewarmRecord] = {}
+        self.prewarm_in_flight: set[str] = set()
 
     async def async_added_to_hass(self) -> None:
         """When entity is added to Home Assistant."""
@@ -152,6 +157,8 @@ class LocalLLMAgent(ConversationEntity, AbstractConversationAgent, LocalLLMEntit
         except conversation.ConverseError as err:
             return err.as_conversation_result()
 
+        self._log_prewarm_match(user_input, chat_log)
+
         message_history = self._build_message_history(chat_log, options)
 
         for _iteration in range(iterations):
@@ -195,6 +202,68 @@ class LocalLLMAgent(ConversationEntity, AbstractConversationAgent, LocalLLMEntit
                 )
 
         return self._build_result(user_input, chat_log, options)
+
+    def _log_prewarm_match(self, user_input: ConversationInput, chat_log: conversation.ChatLog) -> None:
+        """[prewarm1] Debug only: say whether this turn's system prompt is the one pre-warmed for its device."""
+        try:
+            record = self._prewarms.pop(user_input.device_id or "", None)
+            if record is not None:
+                _LOGGER.debug("prewarm: %s", prewarm_helpers.describe_match(record, chat_log.content[0].content))
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("prewarm: comparison failed", exc_info=True)
+
+    async def async_prewarm(
+        self,
+        device_id: str | None,
+        satellite_id: str | None,
+        language: str,
+        timeout: float,
+        keep_warm: bool = False,
+    ) -> str:
+        """[prewarm1] Send the prefix of the first request a new conversation from this device would make.
+
+        Renders exactly what _async_handle_message renders for a new conversation (same template, LLM API, Home
+        Assistant composition, tools and message formatting), minus the user message, and lets the backend
+        process it with generation disabled. Writes nothing to any chat log, chat session or to the
+        per-conversation prompt cache. Returns a short description for the debug log.
+        """
+        from .backends.generic_openai import GenericOpenAIAPIClient
+
+        if not isinstance(self.client, GenericOpenAIAPIClient):
+            return f"skipped: backend {type(self.client).__name__} does not support pre-warm"
+
+        options = self.runtime_options
+        raw_prompt = options.get(CONF_PROMPT, DEFAULT_PROMPT)
+
+        # A wake-up inside a live conversation continues it with the prompt that conversation was started with,
+        # which the backend still holds: nothing to pre-warm, and a new prompt would only displace it.
+        active = prewarm_helpers.satellite_conversation_is_active(self.hass, satellite_id)
+        cached = self._system_prompts.get(active) if active else None
+        if cached is not None and cached[0] == raw_prompt:
+            return f"skipped: conversation {active} is still active and reuses its prompt"
+        # keep-warm runs on a timer, not on a wake-up: it must not displace ANY live conversation's prompt
+        if keep_warm:
+            for other in prewarm_helpers.active_satellite_conversations(self.hass):
+                if other in self._system_prompts:
+                    return f"skipped (keep-warm): conversation {other} is still active"
+
+        llm_context = prewarm_helpers.llm_context_for(self.hass, device_id, language)
+        llm_api: llm.APIInstance | None = None
+        api_id = options.get(CONF_LLM_HASS_API)
+        if api_id:
+            llm_api = await llm.async_get_api(self.hass, api_id, llm_context)
+
+        # same as _get_system_prompt for a new conversation, without storing it
+        system_prompt = self.client._generate_system_prompt(raw_prompt, llm_api, options)
+        # the API instance the chat log holds and the backend formats the tools from
+        chat_log_api = await PreparedLLMAPI(llm_api).async_get_api_instance(llm_context) if llm_api else None
+        composed = await prewarm_helpers.compose_system_prompt(
+            self.hass, llm_context, chat_log_api, prompt_as_literal(system_prompt), None
+        )
+
+        self._prewarms[device_id or ""] = prewarm_helpers.PrewarmRecord(composed)
+        timings = await self.client.async_prewarm(composed, chat_log_api, options, timeout)
+        return f"sent {len(composed)} chars of system prompt; server timings {timings}"
 
     def _get_system_prompt(
         self,
