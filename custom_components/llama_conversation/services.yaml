@@ -1,4 +1,20 @@
 # Local actions for wake-word prewarm and automation-owned context.
+prepare_schedule:
+  description: Validate a scheduling-only tool proposal and return scheduler.add data. Never creates a schedule or executes a device action.
+  fields:
+    tool_calls:
+      required: true
+      selector:
+        object: {}
+    request:
+      required: true
+      selector:
+        text: {}
+    requested_at:
+      required: true
+      description: Original request timestamp with timezone; relative delays are anchored to this time.
+      selector:
+        text: {}
 get_context:
   description: Render fresh home context for an automation, optionally warming the returned prefix. Runs no tools.
   fields:
@@ -30,6 +46,10 @@ get_context:
       description: Return native tool definitions. Set false for a JSON-only planner.
       selector:
         boolean: {}
+    additional_tools:
+      description: Per-request OpenAI function definitions, returned and prewarmed but never executed by this action.
+      selector:
+        object: {}
     prewarm:
       default: false
       description: Send this exact prefix to the configured backend with generation disabled.

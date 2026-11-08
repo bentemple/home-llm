@@ -29,6 +29,15 @@ SCHEMA = vol.Schema({
     vol.Optional("language"): cv.string,
     vol.Optional("extra_system_prompt", default=""): cv.string,
     vol.Optional("include_tools", default=True): cv.boolean,
+    vol.Optional("additional_tools", default=[]): [{
+        vol.Required("type"): vol.In(["function"]),
+        vol.Required("function"): {
+            vol.Required("name"): cv.string,
+            vol.Optional("description"): cv.string,
+            vol.Required("parameters"): dict,
+            vol.Optional("strict"): cv.boolean,
+        },
+    }],
     vol.Optional("prewarm", default=False): cv.boolean,
     vol.Optional("timeout", default=60): vol.All(vol.Coerce(float), vol.Range(min=1, max=300)),
 })
@@ -82,6 +91,10 @@ def async_setup_services(hass: HomeAssistant) -> None:
             CONF_ENABLE_LEGACY_TOOL_CALLING, DEFAULT_ENABLE_LEGACY_TOOL_CALLING,
         )
         tools = get_oai_formatted_tools(prepared, agent.client._async_get_all_exposed_domains()) if prepared and use_tools else []
+        tools = tools + list(data["additional_tools"])
+        names = [tool["function"]["name"] for tool in tools]
+        if len(set(names)) != len(names):
+            raise HomeAssistantError("Tool names must be unique")
         result: dict[str, Any] = {
             "system_prompt": prompt,
             "messages": [{"role": "system", "content": prompt}],
@@ -98,6 +111,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
             # the rendered prompt remain context; no tool can execute on this path.
             result["timings"] = await agent.client.async_prewarm(
                 prompt, prepared if use_tools else None, options, data["timeout"],
+                tools_override=tools,
             )
             result["prewarmed"] = True
         return result

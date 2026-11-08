@@ -256,6 +256,8 @@ class GenericOpenAIAPIClient(LocalLLMClient):
         llm_api: llm.APIInstance | None,
         entity_options: dict[str, Any],
         timeout: float,
+        *,
+        tools_override: list[dict[str, Any]] | None = None,
     ) -> Dict[str, Any] | None:
         """[prewarm1] Have the server process the prefix of the next first-turn request, generating nothing.
 
@@ -279,7 +281,10 @@ class GenericOpenAIAPIClient(LocalLLMClient):
             "max_tokens": 0,
             "messages": messages,
         }
-        if llm_api and not enable_legacy_tool_calling:
+        if tools_override is not None:
+            if tools_override:
+                request_params["tools"] = tools_override
+        elif llm_api and not enable_legacy_tool_calling:
             request_params["tools"] = get_oai_formatted_tools(llm_api, self._async_get_all_exposed_domains())
 
         async with AsyncOpenAI(api_key=self.api_key, base_url=self.api_host, timeout=timeout, max_retries=0) as client:
