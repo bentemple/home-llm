@@ -21,6 +21,7 @@ from .const import (
 )
 from .prewarm import compose_system_prompt
 from .utils import PreparedLLMAPI, get_oai_formatted_tools, prompt_as_literal
+from .vacuum_tools import patch_multi_room_vacuum_cleaning
 
 SCHEMA = vol.Schema({
     vol.Required("agent_id"): cv.entity_id,
@@ -78,6 +79,8 @@ def async_setup_services(hass: HomeAssistant) -> None:
         api = None
         if api_id := options.get(CONF_LLM_HASS_API):
             api = await llm.async_get_api(hass, api_id, context)
+            # [vacuum1] exported context must match a real turn's tools
+            patch_multi_room_vacuum_cleaning(api)
 
         # Render from current HA states, even if a live conversation has a cached prompt.
         rendered = agent.client._generate_system_prompt(

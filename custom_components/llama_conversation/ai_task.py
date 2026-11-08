@@ -23,6 +23,7 @@ from homeassistant.util.json import json_loads, JSON_DECODE_EXCEPTIONS
 
 from .entity import LocalLLMEntity, LocalLLMClient
 from .utils import PreparedLLMAPI, prompt_as_literal
+from .vacuum_tools import patch_multi_room_vacuum_cleaning
 from .const import (
     CONF_PROMPT,
     CONF_RESPONSE_JSON_SCHEMA,
@@ -259,6 +260,8 @@ class LocalLLMTaskEntity(
             device_id=None,
         )
         instance = await api.async_get_api_instance(llm_context) if api is not None else None
+        # [vacuum1] one clean_area call for every room the user named
+        patch_multi_room_vacuum_cleaning(instance)
         try:
             task_prompt = self.client._generate_system_prompt(raw_task_prompt, instance, entity_options)
         except TemplateError as err:

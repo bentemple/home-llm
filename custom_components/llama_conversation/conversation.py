@@ -18,6 +18,7 @@ from custom_components.llama_conversation.utils import MalformedToolCallExceptio
 
 from .entity import LocalLLMEntity, LocalLLMClient, LocalLLMConfigEntry
 from . import prewarm as prewarm_helpers
+from .vacuum_tools import patch_multi_room_vacuum_cleaning
 from .const import (
     CONF_CHAT_MODEL,
     CONF_CONTEXT_LENGTH,
@@ -135,6 +136,8 @@ class LocalLLMAgent(ConversationEntity, AbstractConversationAgent, LocalLLMEntit
         if api_id:
             try:
                 llm_api = await llm.async_get_api(self.hass, api_id, llm_context)
+                # [vacuum1] one clean_area call for every room the user named
+                patch_multi_room_vacuum_cleaning(llm_api)
             except HomeAssistantError as err:
                 _LOGGER.error("Error getting LLM API %s: %s", api_id, err)
                 return self._error_result(user_input, chat_log, intent.IntentResponseErrorCode.UNKNOWN, f"Error preparing LLM API: {err}")
@@ -252,6 +255,8 @@ class LocalLLMAgent(ConversationEntity, AbstractConversationAgent, LocalLLMEntit
         api_id = options.get(CONF_LLM_HASS_API)
         if api_id:
             llm_api = await llm.async_get_api(self.hass, api_id, llm_context)
+            # [vacuum1] keep the pre-warm prompt/tools identical to a real turn
+            patch_multi_room_vacuum_cleaning(llm_api)
 
         # same as _get_system_prompt for a new conversation, without storing it
         system_prompt = self.client._generate_system_prompt(raw_prompt, llm_api, options)
