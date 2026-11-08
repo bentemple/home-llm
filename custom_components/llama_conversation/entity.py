@@ -626,7 +626,14 @@ class LocalLLMClient:
                 "is_alias": False
             })
             if "aliases" in attributes:
+                # HA's alias list includes the entity's own name; skip it and any repeats, so each
+                # device appears once per distinct name (otherwise every device is listed twice).
+                seen_names = {str(attributes.get('friendly_name') or "").strip().casefold()}
                 for alias in attributes["aliases"]:
+                    alias_key = str(alias or "").strip().casefold()
+                    if not alias_key or alias_key in seen_names:
+                        continue
+                    seen_names.add(alias_key)
                     formatted_devices = formatted_devices + f"{name} '{alias}' = {str_attributes}\n"
                     devices.append({
                         "entity_id": name,
