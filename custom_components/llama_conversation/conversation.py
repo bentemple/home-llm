@@ -18,6 +18,7 @@ from custom_components.llama_conversation.utils import MalformedToolCallExceptio
 
 from .entity import LocalLLMEntity, LocalLLMClient, LocalLLMConfigEntry
 from . import prewarm as prewarm_helpers
+from .followup import async_handle_followup
 from .vacuum_tools import patch_multi_room_vacuum_cleaning
 from .const import (
     CONF_CHAT_MODEL,
@@ -120,6 +121,10 @@ class LocalLLMAgent(ConversationEntity, AbstractConversationAgent, LocalLLMEntit
         the prompt and tools, streams the model's answer (plus the tool calls it triggers) back into the
         log, and turns the result into an intent response.
         """
+        # [followup1] a follow-up handler that asked the user something gets the reply before the model
+        if (followup_result := await async_handle_followup(self.hass, user_input, chat_log)) is not None:
+            return followup_result
+
         options = self.runtime_options
 
         # A configured value below 1 means "answer in a single shot": the model is expected to produce

@@ -409,6 +409,28 @@
                     "description": "Set when the action runs on a timer instead of on a wake-up: it is then skipped while any satellite is in an active conversation, so it never displaces a live conversation's prompt."
                 }
             }
+        },
+        "request_followup": {
+            "name": "Request follow-up",
+            "description": "Gives the next reply in a conversation to a handler action before the model sees it. The handler gets reply, data, conversation_id, device_id, satellite_id and language, and returns {status, speech, data}: done (answer, follow-up over), continue (answer and keep listening for the next reply) or pass (the model answers the reply as usual). Failures, timeouts and other responses count as pass.",
+            "fields": {
+                "handler": {
+                    "name": "Handler",
+                    "description": "Action that handles the reply and returns a response, normally a script (script.my_followup)."
+                },
+                "data": {
+                    "name": "Data",
+                    "description": "Passed to the handler as data, e.g. what was asked."
+                },
+                "conversation_id": {
+                    "name": "Conversation",
+                    "description": "Default: the conversation the calling automation was started by (a sentence trigger)."
+                },
+                "timeout": {
+                    "name": "Timeout",
+                    "description": "Seconds the follow-up waits for a reply before it expires."
+                }
+            }
         }
     }
 }

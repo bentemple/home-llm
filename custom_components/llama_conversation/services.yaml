@@ -102,3 +102,24 @@ prewarm:
       default: false
       selector:
         boolean: {}
+request_followup:
+  description: Give the next reply in this conversation to a handler action before the model. The handler returns status done, continue or pass.
+  fields:
+    handler:
+      required: true
+      example: script.wiki_followup
+      selector:
+        text: {}
+    data:
+      selector:
+        object: {}
+    conversation_id:
+      selector:
+        text: {}
+    timeout:
+      default: 120
+      selector:
+        number:
+          min: 5
+          max: 600
+          unit_of_measurement: s
